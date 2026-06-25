@@ -29,7 +29,7 @@ Each source is connected lazily on first use and cached. Sources may be reached 
 
 
 <a name="ErrReadOnly"></a>
-## type ErrReadOnly
+## type [ErrReadOnly](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L21>)
 
 ErrReadOnly is returned when a write/admin operation targets a read\-only source.
 
@@ -38,7 +38,7 @@ type ErrReadOnly struct{ Source string }
 ```
 
 <a name="ErrReadOnly.Error"></a>
-### func \(ErrReadOnly\) Error
+### func \(ErrReadOnly\) [Error](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L23>)
 
 ```go
 func (e ErrReadOnly) Error() string
@@ -47,7 +47,7 @@ func (e ErrReadOnly) Error() string
 
 
 <a name="ErrUnknownSource"></a>
-## type ErrUnknownSource
+## type [ErrUnknownSource](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L29>)
 
 ErrUnknownSource is returned when a tool references a source name that is not in the configuration.
 
@@ -56,7 +56,7 @@ type ErrUnknownSource struct{ Source string }
 ```
 
 <a name="ErrUnknownSource.Error"></a>
-### func \(ErrUnknownSource\) Error
+### func \(ErrUnknownSource\) [Error](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L31>)
 
 ```go
 func (e ErrUnknownSource) Error() string
@@ -65,7 +65,7 @@ func (e ErrUnknownSource) Error() string
 
 
 <a name="Registry"></a>
-## type Registry
+## type [Registry](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L49-L54>)
 
 Registry holds the configuration and lazily\-connected sources.
 
@@ -76,7 +76,7 @@ type Registry struct {
 ```
 
 <a name="NewRegistry"></a>
-### func NewRegistry
+### func [NewRegistry](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L57>)
 
 ```go
 func NewRegistry(cfg map[string]config.SourceConfig) *Registry
@@ -85,7 +85,7 @@ func NewRegistry(cfg map[string]config.SourceConfig) *Registry
 NewRegistry builds a registry from the configured sources.
 
 <a name="Registry.Close"></a>
-### func \(\*Registry\) Close
+### func \(\*Registry\) [Close](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L166>)
 
 ```go
 func (r *Registry) Close(ctx context.Context) error
@@ -94,7 +94,7 @@ func (r *Registry) Close(ctx context.Context) error
 Close disconnects all connected sources and tears down SSH tunnels.
 
 <a name="Registry.Config"></a>
-### func \(\*Registry\) Config
+### func \(\*Registry\) [Config](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L74>)
 
 ```go
 func (r *Registry) Config(name string) (config.SourceConfig, bool)
@@ -103,7 +103,7 @@ func (r *Registry) Config(name string) (config.SourceConfig, bool)
 Config returns the static configuration for a source, if present.
 
 <a name="Registry.Get"></a>
-### func \(\*Registry\) Get
+### func \(\*Registry\) [Get](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L80>)
 
 ```go
 func (r *Registry) Get(ctx context.Context, name string) (*Source, error)
@@ -112,7 +112,7 @@ func (r *Registry) Get(ctx context.Context, name string) (*Source, error)
 Get returns a connected source by name, connecting on first use.
 
 <a name="Registry.Names"></a>
-### func \(\*Registry\) Names
+### func \(\*Registry\) [Names](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L65>)
 
 ```go
 func (r *Registry) Names() []string
@@ -121,7 +121,7 @@ func (r *Registry) Names() []string
 Names returns the configured source names.
 
 <a name="Registry.RequireWritable"></a>
-### func \(\*Registry\) RequireWritable
+### func \(\*Registry\) [RequireWritable](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L102>)
 
 ```go
 func (r *Registry) RequireWritable(ctx context.Context, name string) (*Source, error)
@@ -130,7 +130,7 @@ func (r *Registry) RequireWritable(ctx context.Context, name string) (*Source, e
 RequireWritable returns a connected source and errors if it is read\-only.
 
 <a name="Source"></a>
-## type Source
+## type [Source](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L36-L43>)
 
 Source is a live, connected MongoDB source.
 
@@ -144,7 +144,7 @@ type Source struct {
 ```
 
 <a name="Source.Client"></a>
-### func \(\*Source\) Client
+### func \(\*Source\) [Client](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L46>)
 
 ```go
 func (s *Source) Client() *mongo.Client
@@ -153,7 +153,7 @@ func (s *Source) Client() *mongo.Client
 Client returns the underlying MongoDB client.
 
 <a name="Source.Database"></a>
-### func \(\*Source\) Database
+### func \(\*Source\) [Database](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L115>)
 
 ```go
 func (s *Source) Database(name string) (*mongo.Database, error)
