@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Pre-commit format gate. Activate with `just install-hooks`.
+# Bypass an individual commit with `git commit --no-verify`.
+set -euo pipefail
+
+if ! command -v golangci-lint >/dev/null 2>&1; then
+    echo "pre-commit: golangci-lint not found on PATH; skipping format gate" >&2
+    exit 0
+fi
+
+out=$(golangci-lint fmt --diff ./... 2>/dev/null || true)
+if [ -n "$out" ]; then
+    echo "pre-commit: code is not formatted. Run 'just fmt' and re-stage." >&2
+    printf '%s\n' "$out" >&2
+    exit 1
+fi

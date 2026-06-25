@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/stubbedev/mongodb-mcp/config.schema.json",
+  "$defs": {
+    "HTTPConfig": {
+      "properties": {
+        "addr": {
+          "type": "string",
+          "description": "TCP listen address for the HTTP transport.",
+          "default": "127.0.0.1:8080"
+        },
+        "path": {
+          "type": "string",
+          "description": "HTTP path the MCP endpoint is served on.",
+          "default": "/mcp"
+        },
+        "stateless": {
+          "type": "boolean",
+          "description": "Serve without server-side session state (for load-balanced proxies)."
+        },
+        "json_response": {
+          "type": "boolean",
+          "description": "Return application/json responses instead of an SSE stream."
+        },
+        "trust_proxy": {
+          "type": "boolean",
+          "description": "Trust a fronting reverse/MCP proxy: disables Host-header DNS-rebinding protection."
+        },
+        "allowed_origins": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Trusted browser Origins for cross-origin requests. Empty = default protection; [\"*\"] = disable cross-origin protection."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "addr",
+        "path",
+        "stateless"
+      ]
+    },
+    "SSHConfig": {
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SSH server hostname or IP."
+        },
+        "port": {
+          "type": "integer",
+          "description": "SSH server port.",
+          "default": 22
+        },
+        "user": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SSH username."
+        },
+        "identity_file": {
+          "type": "string",
+          "description": "Path to a private key file (~ is expanded)."
+        },
+        "passphrase": {
+          "type": "string",
+          "description": "Passphrase for the identity file"
+        },
+        "password": {
+          "type": "string",
+          "description": "Password for password authentication."
+        },
+        "use_agent": {
+          "type": "boolean",
+          "description": "Use the SSH agent at $SSH_AUTH_SOCK for authentication."
+        },
+        "known_hosts_file": {
+          "type": "string",
+          "description": "known_hosts file for host-key verification (~ is expanded). Defaults to ~/.ssh/known_hosts."
+        },
+        "insecure_ignore_host_key": {
+          "type": "boolean",
+          "description": "Disable host-key verification (INSECURE; for trusted networks/testing only)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "host",
+        "user"
+      ]
+    },
+    "ServerConfig": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Server name advertised to MCP clients.",
+          "default": "mongodb-mcp"
+        },
+        "version": {
+          "type": "string",
+          "description": "Server version advertised to MCP clients.",
+          "default": "0.1.0"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "SourceConfig": {
+      "properties": {
+        "uri": {
+          "type": "string",
+          "minLength": 1,
+          "description": "MongoDB connection string (mongodb:// or mongodb+srv://). With ssh set"
+        },
+        "readonly": {
+          "type": "boolean",
+          "description": "When true"
+        },
+        "default_database": {
+          "type": "string",
+          "description": "Database used when a tool call omits the database argument."
+        },
+        "connect_timeout": {
+          "type": "string",
+          "description": "Connection/ping timeout as a Go duration (e.g. 10s). Default 10s."
+        },
+        "ssh": {
+          "$ref": "#/$defs/SSHConfig",
+          "description": "Optional SSH tunnel. When set"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "uri",
+        "readonly"
+      ]
+    }
+  },
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional path or URL to the JSON Schema for this file (ignored at runtime)."
+    },
+    "server": {
+      "$ref": "#/$defs/ServerConfig",
+      "description": "MCP server identity reported to clients."
+    },
+    "http": {
+      "$ref": "#/$defs/HTTPConfig",
+      "description": "Streamable HTTP transport settings (used with --transport http)."
+    },
+    "sources": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SourceConfig"
+      },
+      "type": "object",
+      "description": "Named MongoDB connections keyed by a logical source name."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "server",
+    "http",
+    "sources"
+  ],
+  "title": "mongodb-mcp configuration"
+}

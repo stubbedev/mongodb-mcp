@@ -1,0 +1,8 @@
+/mongodb-mcp
+/dist/
+/result
+/result-*
+*.test
+*.out
+config.json
+.direnv/

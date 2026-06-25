@@ -1,0 +1,35 @@
+{
+  "$schema": "./config.schema.json",
+  "server": {
+    "name": "mongodb-mcp",
+    "version": "0.1.0"
+  },
+  "http": {
+    "addr": "127.0.0.1:8080",
+    "path": "/mcp",
+    "stateless": false,
+    "trust_proxy": false,
+    "allowed_origins": []
+  },
+  "sources": {
+    "local": {
+      "uri": "mongodb://localhost:27017",
+      "readonly": false,
+      "default_database": "test"
+    },
+    "prod": {
+      "uri": "mongodb://app:secret@db.internal:27017/?authSource=admin",
+      "readonly": true,
+      "default_database": "app",
+      "connect_timeout": "10s",
+      "ssh": {
+        "host": "bastion.example.com",
+        "port": 22,
+        "user": "deploy",
+        "identity_file": "~/.ssh/id_ed25519",
+        "use_agent": true,
+        "known_hosts_file": "~/.ssh/known_hosts"
+      }
+    }
+  }
+}

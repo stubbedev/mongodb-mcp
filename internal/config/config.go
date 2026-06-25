@@ -1,0 +1,228 @@
+// Package config defines the on-disk configuration for mongodb-mcp and the
+// logic to locate and load it from an XDG-compliant path.
+//
+// The configuration is a single JSON document. Its JSON Schema is generated
+// from these types by cmd/gen-schema (see config.schema.json), so keep the
+// json and jsonschema struct tags meaningful — they are the source of truth
+// for both the schema and the generated documentation.
+package config
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/adrg/xdg"
+)
+
+// DefaultConfigName is the XDG-relative path searched when no explicit config
+// path is provided, e.g. $XDG_CONFIG_HOME/mongodb-mcp/config.json.
+const DefaultConfigName = "mongodb-mcp/config.json"
+
+// Config is the root configuration document.
+type Config struct {
+	// Schema is an optional pointer to the JSON Schema for editor tooling. It
+	// is ignored at runtime.
+	Schema string `json:"$schema,omitempty" jsonschema:"description=Optional path or URL to the JSON Schema for this file (ignored at runtime)."`
+
+	// Server holds MCP server identity reported to clients.
+	Server ServerConfig `json:"server" jsonschema:"description=MCP server identity reported to clients."`
+
+	// HTTP configures the streamable HTTP transport. It is only used when the
+	// server is started with --transport http.
+	HTTP HTTPConfig `json:"http" jsonschema:"description=Streamable HTTP transport settings (used with --transport http)."`
+
+	// Sources maps a logical name to a MongoDB connection. Every tool call
+	// selects which source it operates on by this name.
+	Sources map[string]SourceConfig `json:"sources" jsonschema:"description=Named MongoDB connections keyed by a logical source name.,minProperties=1"`
+}
+
+// ServerConfig holds the MCP server identity.
+type ServerConfig struct {
+	Name    string `json:"name" jsonschema:"description=Server name advertised to MCP clients.,default=mongodb-mcp"`
+	Version string `json:"version" jsonschema:"description=Server version advertised to MCP clients.,default=0.1.0"`
+}
+
+// HTTPConfig configures the streamable HTTP transport. The defaults are chosen
+// for same-machine use but every field can be overridden to run cleanly behind
+// a reverse proxy or MCP proxy.
+type HTTPConfig struct {
+	// Addr is the TCP listen address, e.g. "127.0.0.1:8080" or ":8080".
+	Addr string `json:"addr" jsonschema:"description=TCP listen address for the HTTP transport.,default=127.0.0.1:8080"`
+
+	// Path is the HTTP route the MCP endpoint is mounted on. When running
+	// behind an MCP proxy that strips or adds a prefix, set this to match the
+	// path the proxy forwards.
+	Path string `json:"path" jsonschema:"description=HTTP path the MCP endpoint is served on.,default=/mcp"`
+
+	// Stateless serves each request without server-side session affinity. Set
+	// this when load-balanced behind a proxy that cannot pin a client to one
+	// backend via the Mcp-Session-Id header.
+	Stateless bool `json:"stateless" jsonschema:"description=Serve without server-side session state (for load-balanced proxies)."`
+
+	// JSONResponse returns application/json instead of an SSE stream for
+	// responses. Some simple proxies/clients prefer plain JSON.
+	JSONResponse bool `json:"json_response,omitempty" jsonschema:"description=Return application/json responses instead of an SSE stream."`
+
+	// TrustProxy disables the built-in localhost/Host-header DNS-rebinding
+	// protection. Enable it when a reverse proxy or MCP proxy forwards requests
+	// with a non-localhost Host header to this server's loopback listener.
+	TrustProxy bool `json:"trust_proxy,omitempty" jsonschema:"description=Trust a fronting reverse/MCP proxy: disables Host-header DNS-rebinding protection."`
+
+	// AllowedOrigins is a list of browser Origins permitted for cross-origin
+	// requests. Empty applies the default cross-origin protection (non-browser
+	// and same-origin requests pass; cross-origin browser requests are denied).
+	// Use ["*"] to disable cross-origin protection entirely (trust the proxy).
+	AllowedOrigins []string `json:"allowed_origins,omitempty" jsonschema:"description=Trusted browser Origins for cross-origin requests. Empty = default protection; [\"*\"] = disable cross-origin protection."`
+}
+
+// SourceConfig describes a single MongoDB connection.
+type SourceConfig struct {
+	// URI is the standard MongoDB connection string. When SSH is set, the
+	// host(s) in this URI are resolved from the SSH server's network.
+	URI string `json:"uri" jsonschema:"description=MongoDB connection string (mongodb:// or mongodb+srv://). With ssh set, hosts are resolved from the SSH server's network.,minLength=1"`
+
+	// ReadOnly disables every write/admin tool for this source. Read tools
+	// remain available.
+	ReadOnly bool `json:"readonly" jsonschema:"description=When true, all write and admin tools refuse this source."`
+
+	// DefaultDatabase is used by tools when no database argument is supplied.
+	DefaultDatabase string `json:"default_database,omitempty" jsonschema:"description=Database used when a tool call omits the database argument."`
+
+	// ConnectTimeout bounds the initial connection + ping. Go duration string
+	// (e.g. "10s"). Defaults to 10s when empty.
+	ConnectTimeout string `json:"connect_timeout,omitempty" jsonschema:"description=Connection/ping timeout as a Go duration (e.g. 10s). Default 10s."`
+
+	// SSH, when set, tunnels the MongoDB connection through an SSH server.
+	SSH *SSHConfig `json:"ssh,omitempty" jsonschema:"description=Optional SSH tunnel. When set, the MongoDB connection is dialed through this SSH server."`
+}
+
+// SSHConfig configures an SSH tunnel for a source. Authentication methods are
+// attempted in this order, using whatever is configured: SSH agent, identity
+// file, then password — mirroring an interactive ssh client.
+type SSHConfig struct {
+	Host string `json:"host" jsonschema:"description=SSH server hostname or IP.,minLength=1"`
+	Port int    `json:"port,omitempty" jsonschema:"description=SSH server port.,default=22"`
+	User string `json:"user" jsonschema:"description=SSH username.,minLength=1"`
+
+	IdentityFile string `json:"identity_file,omitempty" jsonschema:"description=Path to a private key file (~ is expanded)."`
+	Passphrase   string `json:"passphrase,omitempty" jsonschema:"description=Passphrase for the identity file, if encrypted."`
+	Password     string `json:"password,omitempty" jsonschema:"description=Password for password authentication."`
+
+	UseAgent bool `json:"use_agent,omitempty" jsonschema:"description=Use the SSH agent at $SSH_AUTH_SOCK for authentication."`
+
+	KnownHostsFile        string `json:"known_hosts_file,omitempty" jsonschema:"description=known_hosts file for host-key verification (~ is expanded). Defaults to ~/.ssh/known_hosts."`
+	InsecureIgnoreHostKey bool   `json:"insecure_ignore_host_key,omitempty" jsonschema:"description=Disable host-key verification (INSECURE; for trusted networks/testing only)."`
+}
+
+// Load reads and validates configuration. When path is empty the file is
+// located via the XDG base directory specification.
+func Load(path string) (*Config, error) {
+	if path == "" {
+		found, err := xdg.SearchConfigFile(DefaultConfigName)
+		if err != nil {
+			return nil, fmt.Errorf("no config file: pass --config or create %s in an XDG config dir: %w", DefaultConfigName, err)
+		}
+		path = found
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config %q: %w", path, err)
+	}
+
+	dec := json.NewDecoder(strings.NewReader(string(data)))
+	dec.DisallowUnknownFields()
+	var cfg Config
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parse config %q: %w", path, err)
+	}
+
+	cfg.applyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config %q: %w", path, err)
+	}
+	return &cfg, nil
+}
+
+func (c *Config) applyDefaults() {
+	if c.Server.Name == "" {
+		c.Server.Name = "mongodb-mcp"
+	}
+	if c.Server.Version == "" {
+		c.Server.Version = "0.1.0"
+	}
+	if c.HTTP.Addr == "" {
+		c.HTTP.Addr = "127.0.0.1:8080"
+	}
+	if c.HTTP.Path == "" {
+		c.HTTP.Path = "/mcp"
+	}
+	for name, src := range c.Sources {
+		if src.SSH != nil && src.SSH.Port == 0 {
+			src.SSH.Port = 22
+			c.Sources[name] = src
+		}
+	}
+}
+
+// Validate checks invariants that the JSON Schema cannot express.
+func (c *Config) Validate() error {
+	if len(c.Sources) == 0 {
+		return fmt.Errorf("at least one source must be configured")
+	}
+	for name, src := range c.Sources {
+		if name == "" {
+			return fmt.Errorf("source name must not be empty")
+		}
+		if src.URI == "" {
+			return fmt.Errorf("source %q: uri is required", name)
+		}
+		if src.ConnectTimeout != "" {
+			if _, err := time.ParseDuration(src.ConnectTimeout); err != nil {
+				return fmt.Errorf("source %q: invalid connect_timeout %q: %w", name, src.ConnectTimeout, err)
+			}
+		}
+		if s := src.SSH; s != nil {
+			if s.Host == "" {
+				return fmt.Errorf("source %q: ssh.host is required", name)
+			}
+			if s.User == "" {
+				return fmt.Errorf("source %q: ssh.user is required", name)
+			}
+			if s.IdentityFile == "" && s.Password == "" && !s.UseAgent {
+				return fmt.Errorf("source %q: ssh needs at least one of identity_file, password, or use_agent", name)
+			}
+		}
+	}
+	return nil
+}
+
+// ConnectTimeoutOrDefault returns the parsed timeout or the 10s default.
+func (s SourceConfig) ConnectTimeoutOrDefault() time.Duration {
+	if s.ConnectTimeout == "" {
+		return 10 * time.Second
+	}
+	d, err := time.ParseDuration(s.ConnectTimeout)
+	if err != nil {
+		return 10 * time.Second
+	}
+	return d
+}
+
+// ExpandPath expands a leading ~ to the user's home directory.
+func ExpandPath(p string) string {
+	if p == "" {
+		return p
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return filepath.Join(home, strings.TrimPrefix(p, "~"))
+		}
+	}
+	return p
+}

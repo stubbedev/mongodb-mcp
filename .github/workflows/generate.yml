@@ -1,0 +1,72 @@
+name: Generate
+
+# Regenerates derived artifacts and commits them back:
+#   - config.schema.json   (from the Go config types)
+#   - docs/                (gomarkdoc API docs)
+#   - flake.nix vendorHash (recomputed when Go deps change)
+#   - flake.lock           (nix flake update)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "VERSION"
+      - "flake.nix"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Generate config schema
+        run: go run ./cmd/gen-schema
+
+      - name: Generate API docs
+        run: |
+          go run github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest \
+            --output 'docs/{{.Dir}}.md' ./...
+
+      - name: Update flake.lock
+        run: nix flake update
+
+      - name: Update flake vendorHash
+        run: bash scripts/update-flake-vendor-hash.sh
+
+      - name: Verify flake still builds
+        run: nix build --print-build-logs
+
+      - name: Commit changes
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- config.schema.json docs flake.nix flake.lock; then
+            echo "nothing to regenerate"
+            exit 0
+          fi
+          git add config.schema.json docs flake.nix flake.lock
+          git commit -m "chore: regenerate schema, docs and flake [skip ci]"
+          git push
