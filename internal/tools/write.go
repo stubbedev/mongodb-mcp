@@ -20,6 +20,7 @@ func registerWrite(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "insertOne",
 		Description: "Insert a single document into a collection. Refused on read-only sources.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in insertOneIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
@@ -53,6 +54,7 @@ func registerWrite(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "insertMany",
 		Description: "Insert multiple documents into a collection. Refused on read-only sources.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in insertManyIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
@@ -97,7 +99,11 @@ func registerUpdate(server *mcp.Server, reg *source.Registry, name, desc string,
 		Update     string `json:"update" jsonschema:"Update document using update operators, e.g. {\"$set\":{\"x\":1}}."`
 		Upsert     bool   `json:"upsert,omitempty" jsonschema:"Insert a new document when no document matches."`
 	}
-	mcp.AddTool(server, &mcp.Tool{Name: name, Description: desc},
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        name,
+		Description: desc,
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+	},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in updateIn) (*mcp.CallToolResult, any, error) {
 			src, err := reg.RequireWritable(ctx, in.Source)
 			if err != nil {
@@ -149,7 +155,11 @@ func registerDelete(server *mcp.Server, reg *source.Registry, name, desc string,
 		Collection string `json:"collection" jsonschema:"Collection name."`
 		Filter     string `json:"filter" jsonschema:"Filter selecting documents to delete, as a JSON object."`
 	}
-	mcp.AddTool(server, &mcp.Tool{Name: name, Description: desc},
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        name,
+		Description: desc,
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
+	},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, any, error) {
 			src, err := reg.RequireWritable(ctx, in.Source)
 			if err != nil {

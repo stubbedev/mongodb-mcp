@@ -22,6 +22,7 @@ func registerAdmin(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "createIndex",
 		Description: "Create an index on a collection. Refused on read-only sources.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createIndexIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
@@ -62,6 +63,7 @@ func registerAdmin(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "dropIndex",
 		Description: "Drop an index from a collection by name. Refused on read-only sources.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in dropIndexIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
@@ -89,6 +91,7 @@ func registerAdmin(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "createCollection",
 		Description: "Create a collection. Refused on read-only sources.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createCollectionIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
@@ -116,6 +119,7 @@ func registerAdmin(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "dropCollection",
 		Description: "Drop a collection and all its documents. Refused on read-only sources.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in dropCollectionIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {

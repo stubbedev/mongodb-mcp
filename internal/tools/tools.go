@@ -13,6 +13,40 @@ import (
 	"github.com/stubbedev/mongodb-mcp/internal/source"
 )
 
+// maxDocs caps how many documents/values any tool returns, so a single query
+// cannot flood the model's context (or this process's memory).
+const maxDocs = 1000
+
+// boolPtr returns a pointer to b, for the *bool hint fields in ToolAnnotations.
+func boolPtr(b bool) *bool { return &b }
+
+// capDocs truncates a result to maxDocs and records the truncation, then sets
+// Count to the number actually returned.
+func capDocs(out *docsOut) {
+	if len(out.Documents) > maxDocs {
+		out.Documents = out.Documents[:maxDocs]
+		out.Truncated = true
+	}
+	out.Count = len(out.Documents)
+}
+
+// pipelineWrites reports whether an aggregation pipeline persists data via a
+// $out or $merge stage. Such pipelines write to a collection even though
+// aggregate is otherwise a read tool, so they must be gated like a write.
+// $out/$merge are required to be the final stage; each stage doc has exactly
+// one key.
+func pipelineWrites(pipeline []bson.D) bool {
+	for _, stage := range pipeline {
+		if len(stage) > 0 {
+			switch stage[0].Key {
+			case "$out", "$merge":
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // collection resolves the *mongo.Collection for a source, applying the source's
 // default database when dbName is empty.
 func collection(src *source.Source, dbName, collName string) (*mongo.Collection, error) {

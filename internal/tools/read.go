@@ -13,6 +13,7 @@ import (
 // docs is the common output shape for tools that return documents.
 type docsOut struct {
 	Count     int      `json:"count"`
+	Truncated bool     `json:"truncated,omitempty"`
 	Documents []bson.M `json:"documents"`
 }
 
@@ -30,6 +31,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "find",
 		Description: "Query documents in a collection with an optional filter, projection, sort, limit and skip.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in findIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
@@ -74,7 +76,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err := cur.All(ctx, &out.Documents); err != nil {
 			return errResult(err), nil, nil
 		}
-		out.Count = len(out.Documents)
+		capDocs(&out)
 		res, err := textResult(out)
 		return res, out, err
 	})
@@ -87,7 +89,9 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "aggregate",
-		Description: "Run an aggregation pipeline against a collection.",
+		Description: "Run an aggregation pipeline against a collection. Pipelines using $out or $merge write data and are refused on read-only sources.",
+		// Not ReadOnlyHint: a pipeline may write via $out / $merge.
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in aggregateIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
@@ -101,6 +105,17 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err != nil {
 			return errResult(err), nil, nil
 		}
+		// $out/$merge persist data — gate them behind the writable policy so an
+		// aggregate cannot bypass a read-only source.
+		writes := pipelineWrites(pipeline)
+		if writes && src.ReadOnly {
+			return errResult(source.ErrReadOnly{Source: in.Source}), nil, nil
+		}
+		// Bound non-writing pipelines so they cannot pull an unbounded result
+		// set into memory and the model's context.
+		if !writes {
+			pipeline = append(pipeline, bson.D{{Key: "$limit", Value: int64(maxDocs + 1)}})
+		}
 		cur, err := coll.Aggregate(ctx, pipeline)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -109,7 +124,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err := cur.All(ctx, &out.Documents); err != nil {
 			return errResult(err), nil, nil
 		}
-		out.Count = len(out.Documents)
+		capDocs(&out)
 		res, err := textResult(out)
 		return res, out, err
 	})
@@ -123,6 +138,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "count",
 		Description: "Count documents in a collection matching an optional filter.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in countIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
@@ -157,6 +173,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "distinct",
 		Description: "Return the distinct values for a field across matching documents.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in distinctIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
@@ -174,9 +191,15 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err := coll.Distinct(ctx, in.Field, filter).Decode(&values); err != nil {
 			return errResult(err), nil, nil
 		}
+		truncated := false
+		if len(values) > maxDocs {
+			values = values[:maxDocs]
+			truncated = true
+		}
 		out := struct {
-			Values []any `json:"values"`
-		}{Values: values}
+			Values    []any `json:"values"`
+			Truncated bool  `json:"truncated,omitempty"`
+		}{Values: values, Truncated: truncated}
 		res, err := textResult(out)
 		return res, out, err
 	})
@@ -187,6 +210,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "listDatabases",
 		Description: "List database names on the source.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listDatabasesIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
@@ -210,6 +234,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "listCollections",
 		Description: "List collection names in a database.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listCollectionsIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
@@ -238,6 +263,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "indexes",
 		Description: "List the indexes on a collection.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in indexesIn) (*mcp.CallToolResult, any, error) {
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
@@ -255,7 +281,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err := cur.All(ctx, &out.Documents); err != nil {
 			return errResult(err), nil, nil
 		}
-		out.Count = len(out.Documents)
+		capDocs(&out)
 		res, err := textResult(out)
 		return res, out, err
 	})
