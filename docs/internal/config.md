@@ -33,7 +33,7 @@ const DefaultConfigName = "mongodb-mcp/config.json"
 ```
 
 <a name="ExpandPath"></a>
-## func ExpandPath
+## func [ExpandPath](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L217>)
 
 ```go
 func ExpandPath(p string) string
@@ -42,7 +42,7 @@ func ExpandPath(p string) string
 ExpandPath expands a leading \~ to the user's home directory.
 
 <a name="Config"></a>
-## type Config
+## type [Config](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L26-L41>)
 
 Config is the root configuration document.
 
@@ -66,7 +66,7 @@ type Config struct {
 ```
 
 <a name="Load"></a>
-### func Load
+### func [Load](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L123>)
 
 ```go
 func Load(path string) (*Config, error)
@@ -75,7 +75,7 @@ func Load(path string) (*Config, error)
 Load reads and validates configuration. When path is empty the file is located via the XDG base directory specification.
 
 <a name="Config.Validate"></a>
-### func \(\*Config\) Validate
+### func \(\*Config\) [Validate](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L173>)
 
 ```go
 func (c *Config) Validate() error
@@ -84,7 +84,7 @@ func (c *Config) Validate() error
 Validate checks invariants that the JSON Schema cannot express.
 
 <a name="HTTPConfig"></a>
-## type HTTPConfig
+## type [HTTPConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L52-L80>)
 
 HTTPConfig configures the streamable HTTP transport. The defaults are chosen for same\-machine use but every field can be overridden to run cleanly behind a reverse proxy or MCP proxy.
 
@@ -121,7 +121,7 @@ type HTTPConfig struct {
 ```
 
 <a name="SSHConfig"></a>
-## type SSHConfig
+## type [SSHConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L106-L119>)
 
 SSHConfig configures an SSH tunnel for a source. Authentication methods are attempted in this order, using whatever is configured: SSH agent, identity file, then password — mirroring an interactive ssh client.
 
@@ -143,7 +143,7 @@ type SSHConfig struct {
 ```
 
 <a name="ServerConfig"></a>
-## type ServerConfig
+## type [ServerConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L44-L47>)
 
 ServerConfig holds the MCP server identity.
 
@@ -155,7 +155,7 @@ type ServerConfig struct {
 ```
 
 <a name="SourceConfig"></a>
-## type SourceConfig
+## type [SourceConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L83-L101>)
 
 SourceConfig describes a single MongoDB connection.
 
@@ -182,7 +182,7 @@ type SourceConfig struct {
 ```
 
 <a name="SourceConfig.ConnectTimeoutOrDefault"></a>
-### func \(SourceConfig\) ConnectTimeoutOrDefault
+### func \(SourceConfig\) [ConnectTimeoutOrDefault](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L205>)
 
 ```go
 func (s SourceConfig) ConnectTimeoutOrDefault() time.Duration
