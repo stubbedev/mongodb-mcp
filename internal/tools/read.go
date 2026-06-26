@@ -13,7 +13,7 @@ import (
 // docs is the common output shape for tools that return documents.
 type docsOut struct {
 	Count     int      `json:"count"`
-	Truncated bool     `json:"truncated,omitempty"`
+	HasMore   bool     `json:"hasMore,omitempty"`
 	Documents []bson.M `json:"documents"`
 }
 
@@ -47,10 +47,11 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		}
 		opts := options.Find()
 		limit := in.Limit
-		if limit <= 0 || limit > 1000 {
-			limit = 1000
+		if limit <= 0 || limit > maxDocs {
+			limit = maxDocs
 		}
-		opts.SetLimit(limit)
+		// Fetch one extra so HasMore reflects whether the next page exists.
+		opts.SetLimit(limit + 1)
 		if in.Skip > 0 {
 			opts.SetSkip(in.Skip)
 		}
@@ -76,7 +77,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err := cur.All(ctx, &out.Documents); err != nil {
 			return errResult(err), nil, nil
 		}
-		capDocs(&out)
+		capDocs(&out, int(limit))
 		res, err := textResult(out)
 		return res, out, err
 	})
@@ -124,7 +125,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err := cur.All(ctx, &out.Documents); err != nil {
 			return errResult(err), nil, nil
 		}
-		capDocs(&out)
+		capDocs(&out, maxDocs)
 		res, err := textResult(out)
 		return res, out, err
 	})
@@ -191,15 +192,15 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err := coll.Distinct(ctx, in.Field, filter).Decode(&values); err != nil {
 			return errResult(err), nil, nil
 		}
-		truncated := false
+		hasMore := false
 		if len(values) > maxDocs {
 			values = values[:maxDocs]
-			truncated = true
+			hasMore = true
 		}
 		out := struct {
-			Values    []any `json:"values"`
-			Truncated bool  `json:"truncated,omitempty"`
-		}{Values: values, Truncated: truncated}
+			Values  []any `json:"values"`
+			HasMore bool  `json:"hasMore,omitempty"`
+		}{Values: values, HasMore: hasMore}
 		res, err := textResult(out)
 		return res, out, err
 	})
@@ -281,7 +282,7 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		if err := cur.All(ctx, &out.Documents); err != nil {
 			return errResult(err), nil, nil
 		}
-		capDocs(&out)
+		capDocs(&out, maxDocs)
 		res, err := textResult(out)
 		return res, out, err
 	})

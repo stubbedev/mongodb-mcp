@@ -20,12 +20,13 @@ const maxDocs = 1000
 // boolPtr returns a pointer to b, for the *bool hint fields in ToolAnnotations.
 func boolPtr(b bool) *bool { return &b }
 
-// capDocs truncates a result to maxDocs and records the truncation, then sets
-// Count to the number actually returned.
-func capDocs(out *docsOut) {
-	if len(out.Documents) > maxDocs {
-		out.Documents = out.Documents[:maxDocs]
-		out.Truncated = true
+// capDocs truncates a result to limit and sets HasMore when more documents were
+// available than returned, then sets Count to the number actually returned.
+// Callers that want HasMore to be accurate should fetch limit+1 documents.
+func capDocs(out *docsOut, limit int) {
+	if len(out.Documents) > limit {
+		out.Documents = out.Documents[:limit]
+		out.HasMore = true
 	}
 	out.Count = len(out.Documents)
 }

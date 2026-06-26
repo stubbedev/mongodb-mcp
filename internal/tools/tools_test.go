@@ -26,15 +26,17 @@ func TestPipelineWrites(t *testing.T) {
 }
 
 func TestCapDocs(t *testing.T) {
-	out := docsOut{Documents: make([]bson.M, maxDocs+5)}
-	capDocs(&out)
-	if !out.Truncated || out.Count != maxDocs || len(out.Documents) != maxDocs {
-		t.Fatalf("over-cap: truncated=%v count=%d len=%d", out.Truncated, out.Count, len(out.Documents))
+	// Fetched limit+1 -> HasMore, trimmed back to limit.
+	out := docsOut{Documents: make([]bson.M, maxDocs+1)}
+	capDocs(&out, maxDocs)
+	if !out.HasMore || out.Count != maxDocs || len(out.Documents) != maxDocs {
+		t.Fatalf("over-cap: hasMore=%v count=%d len=%d", out.HasMore, out.Count, len(out.Documents))
 	}
+	// Exactly limit -> no more pages.
 	out = docsOut{Documents: make([]bson.M, 3)}
-	capDocs(&out)
-	if out.Truncated || out.Count != 3 {
-		t.Fatalf("under-cap: truncated=%v count=%d", out.Truncated, out.Count)
+	capDocs(&out, 3)
+	if out.HasMore || out.Count != 3 {
+		t.Fatalf("exact: hasMore=%v count=%d", out.HasMore, out.Count)
 	}
 }
 
