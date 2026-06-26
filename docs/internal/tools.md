@@ -14,7 +14,7 @@ Package tools registers the MongoDB MCP tools on a server, wiring each tool to t
 
 
 <a name="Register"></a>
-## func Register
+## func [Register](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/tools/tools.go#L68>)
 
 ```go
 func Register(server *mcp.Server, reg *source.Registry)
