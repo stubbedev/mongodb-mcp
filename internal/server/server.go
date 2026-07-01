@@ -14,13 +14,19 @@ import (
 	"github.com/stubbedev/mongodb-mcp/internal/tools"
 )
 
-// New builds an MCP server with all MongoDB tools registered.
+// New builds an MCP server with all MongoDB tools registered. reg is the global
+// fallback registry (nil for roots-only mode); per-client configs are resolved
+// from MCP workspace roots at call time by the resolver.
 func New(cfg *config.Config, reg *source.Registry) *mcp.Server {
+	resolver := source.NewResolver(reg)
 	s := mcp.NewServer(&mcp.Implementation{
 		Name:    cfg.Server.Name,
 		Version: cfg.Server.Version,
-	}, nil)
-	tools.Register(s, reg)
+	}, &mcp.ServerOptions{
+		RootsListChangedHandler: resolver.OnRootsChanged,
+	})
+	resolver.AttachServer(s)
+	tools.Register(s, resolver)
 	return s
 }
 

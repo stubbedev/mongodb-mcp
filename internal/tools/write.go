@@ -10,7 +10,7 @@ import (
 	"github.com/stubbedev/mongodb-mcp/internal/source"
 )
 
-func registerWrite(server *mcp.Server, reg *source.Registry) {
+func registerWrite(server *mcp.Server, res *source.Resolver) {
 	type insertOneIn struct {
 		Source     string `json:"source" jsonschema:"Name of the configured source (must not be read-only)."`
 		Database   string `json:"database,omitempty" jsonschema:"Database name (defaults to the source's default_database)."`
@@ -21,7 +21,11 @@ func registerWrite(server *mcp.Server, reg *source.Registry) {
 		Name:        "insertOne",
 		Description: "Insert a single document into a collection. Refused on read-only sources.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in insertOneIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in insertOneIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -55,7 +59,11 @@ func registerWrite(server *mcp.Server, reg *source.Registry) {
 		Name:        "insertMany",
 		Description: "Insert multiple documents into a collection. Refused on read-only sources.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in insertManyIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in insertManyIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -83,14 +91,14 @@ func registerWrite(server *mcp.Server, reg *source.Registry) {
 		return res, out, err
 	})
 
-	registerUpdate(server, reg, "updateOne", "Update a single matching document. Refused on read-only sources.", false)
-	registerUpdate(server, reg, "updateMany", "Update all matching documents. Refused on read-only sources.", true)
+	registerUpdate(server, res, "updateOne", "Update a single matching document. Refused on read-only sources.", false)
+	registerUpdate(server, res, "updateMany", "Update all matching documents. Refused on read-only sources.", true)
 
-	registerDelete(server, reg, "deleteOne", "Delete a single matching document. Refused on read-only sources.", false)
-	registerDelete(server, reg, "deleteMany", "Delete all matching documents. Refused on read-only sources.", true)
+	registerDelete(server, res, "deleteOne", "Delete a single matching document. Refused on read-only sources.", false)
+	registerDelete(server, res, "deleteMany", "Delete all matching documents. Refused on read-only sources.", true)
 }
 
-func registerUpdate(server *mcp.Server, reg *source.Registry, name, desc string, many bool) {
+func registerUpdate(server *mcp.Server, res *source.Resolver, name, desc string, many bool) {
 	type updateIn struct {
 		Source     string `json:"source" jsonschema:"Name of the configured source (must not be read-only)."`
 		Database   string `json:"database,omitempty" jsonschema:"Database name (defaults to the source's default_database)."`
@@ -104,7 +112,11 @@ func registerUpdate(server *mcp.Server, reg *source.Registry, name, desc string,
 		Description: desc,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
 	},
-		func(ctx context.Context, _ *mcp.CallToolRequest, in updateIn) (*mcp.CallToolResult, any, error) {
+		func(ctx context.Context, req *mcp.CallToolRequest, in updateIn) (*mcp.CallToolResult, any, error) {
+			reg, err := res.Registry(ctx, req)
+			if err != nil {
+				return errResult(err), nil, nil
+			}
 			src, err := reg.RequireWritable(ctx, in.Source)
 			if err != nil {
 				return errResult(err), nil, nil
@@ -148,7 +160,7 @@ func registerUpdate(server *mcp.Server, reg *source.Registry, name, desc string,
 		})
 }
 
-func registerDelete(server *mcp.Server, reg *source.Registry, name, desc string, many bool) {
+func registerDelete(server *mcp.Server, res *source.Resolver, name, desc string, many bool) {
 	type deleteIn struct {
 		Source     string `json:"source" jsonschema:"Name of the configured source (must not be read-only)."`
 		Database   string `json:"database,omitempty" jsonschema:"Database name (defaults to the source's default_database)."`
@@ -160,7 +172,11 @@ func registerDelete(server *mcp.Server, reg *source.Registry, name, desc string,
 		Description: desc,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
 	},
-		func(ctx context.Context, _ *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, any, error) {
+		func(ctx context.Context, req *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, any, error) {
+			reg, err := res.Registry(ctx, req)
+			if err != nil {
+				return errResult(err), nil, nil
+			}
 			src, err := reg.RequireWritable(ctx, in.Source)
 			if err != nil {
 				return errResult(err), nil, nil

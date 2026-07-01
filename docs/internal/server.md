@@ -16,7 +16,7 @@ Package server wires configuration and the source registry into an MCP server, a
 
 
 <a name="HTTPHandler"></a>
-## func HTTPHandler
+## func [HTTPHandler](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/server/server.go#L41>)
 
 ```go
 func HTTPHandler(s *mcp.Server, cfg config.HTTPConfig) http.Handler
@@ -25,16 +25,16 @@ func HTTPHandler(s *mcp.Server, cfg config.HTTPConfig) http.Handler
 HTTPHandler returns an http.Handler serving the MCP server over streamable HTTP at cfg.Path, with Origin allow\-listing suitable for running behind a reverse proxy or MCP proxy.
 
 <a name="New"></a>
-## func New
+## func [New](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/server/server.go#L20>)
 
 ```go
 func New(cfg *config.Config, reg *source.Registry) *mcp.Server
 ```
 
-New builds an MCP server with all MongoDB tools registered.
+New builds an MCP server with all MongoDB tools registered. reg is the global fallback registry \(nil for roots\-only mode\); per\-client configs are resolved from MCP workspace roots at call time by the resolver.
 
 <a name="RunStdio"></a>
-## func RunStdio
+## func [RunStdio](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/server/server.go#L34>)
 
 ```go
 func RunStdio(ctx context.Context, s *mcp.Server) error

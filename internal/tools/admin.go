@@ -10,7 +10,7 @@ import (
 	"github.com/stubbedev/mongodb-mcp/internal/source"
 )
 
-func registerAdmin(server *mcp.Server, reg *source.Registry) {
+func registerAdmin(server *mcp.Server, res *source.Resolver) {
 	type createIndexIn struct {
 		Source     string `json:"source" jsonschema:"Name of the configured source (must not be read-only)."`
 		Database   string `json:"database,omitempty" jsonschema:"Database name (defaults to the source's default_database)."`
@@ -23,7 +23,11 @@ func registerAdmin(server *mcp.Server, reg *source.Registry) {
 		Name:        "createIndex",
 		Description: "Create an index on a collection. Refused on read-only sources.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createIndexIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in createIndexIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -64,7 +68,11 @@ func registerAdmin(server *mcp.Server, reg *source.Registry) {
 		Name:        "dropIndex",
 		Description: "Drop an index from a collection by name. Refused on read-only sources.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in dropIndexIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in dropIndexIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -92,7 +100,11 @@ func registerAdmin(server *mcp.Server, reg *source.Registry) {
 		Name:        "createCollection",
 		Description: "Create a collection. Refused on read-only sources.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in createCollectionIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in createCollectionIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -120,7 +132,11 @@ func registerAdmin(server *mcp.Server, reg *source.Registry) {
 		Name:        "dropCollection",
 		Description: "Drop a collection and all its documents. Refused on read-only sources.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in dropCollectionIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in dropCollectionIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.RequireWritable(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil

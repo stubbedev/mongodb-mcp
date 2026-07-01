@@ -49,6 +49,7 @@ func TestServerExposesTools(t *testing.T) {
 		got[tool.Name] = true
 	}
 	want := []string{
+		"listSources",
 		"find", "aggregate", "count", "distinct",
 		"listDatabases", "listCollections", "indexes",
 		"insertOne", "insertMany", "updateOne", "updateMany",

@@ -9,6 +9,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,6 +22,26 @@ import (
 // DefaultConfigName is the XDG-relative path searched when no explicit config
 // path is provided, e.g. $XDG_CONFIG_HOME/mongodb-mcp/config.json.
 const DefaultConfigName = "mongodb-mcp/config.json"
+
+// RootConfigName is the per-workspace config file name looked up at a client's
+// MCP workspace root. When present it overrides the server's global config for
+// that client, letting one server serve several clients each with their own
+// sources.
+const RootConfigName = ".mongodb-mcp.json"
+
+// ErrNotFound is returned by Load when no config file exists at the default XDG
+// search path. Callers may treat this as "run without a global config" rather
+// than a hard failure (roots-only mode).
+var ErrNotFound = errors.New("no config file found")
+
+// Default returns a Config with server identity and HTTP transport defaults
+// applied and no sources. It is used for roots-only mode, where every source is
+// supplied per client via RootConfigName.
+func Default() *Config {
+	c := &Config{}
+	c.applyDefaults()
+	return c
+}
 
 // Config is the root configuration document.
 type Config struct {
@@ -82,8 +103,16 @@ type HTTPConfig struct {
 // SourceConfig describes a single MongoDB connection.
 type SourceConfig struct {
 	// URI is the standard MongoDB connection string. When SSH is set, the
-	// host(s) in this URI are resolved from the SSH server's network.
-	URI string `json:"uri" jsonschema:"description=MongoDB connection string (mongodb:// or mongodb+srv://). With ssh set, hosts are resolved from the SSH server's network.,minLength=1"`
+	// host(s) in this URI are resolved from the SSH server's network. Supports
+	// ${ENV_VAR} expansion so credentials can live in the environment rather
+	// than in the file.
+	URI string `json:"uri" jsonschema:"description=MongoDB connection string (mongodb:// or mongodb+srv://). Supports ${ENV_VAR} expansion. With ssh set, hosts are resolved from the SSH server's network.,minLength=1"`
+
+	// Description is an optional human-readable summary of what this source is
+	// for (e.g. "production analytics replica, read-only"). It is surfaced to
+	// MCP clients via listSources so a model can pick the right source for a
+	// task without being told which one to use.
+	Description string `json:"description,omitempty" jsonschema:"description=Human-readable summary of what this source is for; shown by listSources so a model can pick the right one."`
 
 	// ReadOnly disables every write/admin tool for this source. Read tools
 	// remain available.
@@ -95,6 +124,11 @@ type SourceConfig struct {
 	// ConnectTimeout bounds the initial connection + ping. Go duration string
 	// (e.g. "10s"). Defaults to 10s when empty.
 	ConnectTimeout string `json:"connect_timeout,omitempty" jsonschema:"description=Connection/ping timeout as a Go duration (e.g. 10s). Default 10s."`
+
+	// OperationTimeout caps every individual operation (find, aggregate, write,
+	// ...) via the driver's client-side operation timeout. Go duration string.
+	// Defaults to 30s when empty; set "0s" to disable.
+	OperationTimeout string `json:"operation_timeout,omitempty" jsonschema:"description=Per-operation timeout as a Go duration (e.g. 30s). Default 30s; \"0s\" disables."`
 
 	// SSH, when set, tunnels the MongoDB connection through an SSH server.
 	SSH *SSHConfig `json:"ssh,omitempty" jsonschema:"description=Optional SSH tunnel. When set, the MongoDB connection is dialed through this SSH server."`
@@ -124,7 +158,7 @@ func Load(path string) (*Config, error) {
 	if path == "" {
 		found, err := xdg.SearchConfigFile(DefaultConfigName)
 		if err != nil {
-			return nil, fmt.Errorf("no config file: pass --config or create %s in an XDG config dir: %w", DefaultConfigName, err)
+			return nil, fmt.Errorf("%w: pass --config or create %s in an XDG config dir", ErrNotFound, DefaultConfigName)
 		}
 		path = found
 	}
@@ -142,10 +176,35 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg.applyDefaults()
+	cfg.expandEnv()
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config %q: %w", path, err)
 	}
 	return &cfg, nil
+}
+
+// expandEnv expands ${ENV_VAR} references in secret-bearing string fields, so
+// credentials can be kept in the environment rather than on disk (important for
+// per-workspace configs that may live in a repo). Runs before Validate, so a
+// variable that expands to empty surfaces as a normal validation error.
+func (c *Config) expandEnv() {
+	for name, src := range c.Sources {
+		src.URI = expandEnv(src.URI)
+		if s := src.SSH; s != nil {
+			s.Password = expandEnv(s.Password)
+			s.Passphrase = expandEnv(s.Passphrase)
+			s.IdentityFile = expandEnv(s.IdentityFile)
+			s.KnownHostsFile = expandEnv(s.KnownHostsFile)
+		}
+		c.Sources[name] = src
+	}
+}
+
+func expandEnv(s string) string {
+	if !strings.Contains(s, "${") {
+		return s
+	}
+	return os.Expand(s, os.Getenv)
 }
 
 func (c *Config) applyDefaults() {
@@ -186,6 +245,11 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("source %q: invalid connect_timeout %q: %w", name, src.ConnectTimeout, err)
 			}
 		}
+		if src.OperationTimeout != "" {
+			if _, err := time.ParseDuration(src.OperationTimeout); err != nil {
+				return fmt.Errorf("source %q: invalid operation_timeout %q: %w", name, src.OperationTimeout, err)
+			}
+		}
 		if s := src.SSH; s != nil {
 			if s.Host == "" {
 				return fmt.Errorf("source %q: ssh.host is required", name)
@@ -209,6 +273,19 @@ func (s SourceConfig) ConnectTimeoutOrDefault() time.Duration {
 	d, err := time.ParseDuration(s.ConnectTimeout)
 	if err != nil {
 		return 10 * time.Second
+	}
+	return d
+}
+
+// OperationTimeoutOrDefault returns the parsed per-operation timeout or the 30s
+// default. A configured "0s" disables the timeout (returns 0).
+func (s SourceConfig) OperationTimeoutOrDefault() time.Duration {
+	if s.OperationTimeout == "" {
+		return 30 * time.Second
+	}
+	d, err := time.ParseDuration(s.OperationTimeout)
+	if err != nil {
+		return 30 * time.Second
 	}
 	return d
 }

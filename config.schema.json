@@ -116,7 +116,11 @@
         "uri": {
           "type": "string",
           "minLength": 1,
-          "description": "MongoDB connection string (mongodb:// or mongodb+srv://). With ssh set"
+          "description": "MongoDB connection string (mongodb:// or mongodb+srv://). Supports ${ENV_VAR} expansion. With ssh set"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable summary of what this source is for; shown by listSources so a model can pick the right one."
         },
         "readonly": {
           "type": "boolean",
@@ -129,6 +133,10 @@
         "connect_timeout": {
           "type": "string",
           "description": "Connection/ping timeout as a Go duration (e.g. 10s). Default 10s."
+        },
+        "operation_timeout": {
+          "type": "string",
+          "description": "Per-operation timeout as a Go duration (e.g. 30s). Default 30s; \"0s\" disables."
         },
         "ssh": {
           "$ref": "#/$defs/SSHConfig",

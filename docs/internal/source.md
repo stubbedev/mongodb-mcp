@@ -23,13 +23,18 @@ Each source is connected lazily on first use and cached. Sources may be reached 
   - [func \(r \*Registry\) Get\(ctx context.Context, name string\) \(\*Source, error\)](<#Registry.Get>)
   - [func \(r \*Registry\) Names\(\) \[\]string](<#Registry.Names>)
   - [func \(r \*Registry\) RequireWritable\(ctx context.Context, name string\) \(\*Source, error\)](<#Registry.RequireWritable>)
+- [type Resolver](<#Resolver>)
+  - [func NewResolver\(base \*Registry\) \*Resolver](<#NewResolver>)
+  - [func \(r \*Resolver\) AttachServer\(srv \*mcp.Server\)](<#Resolver.AttachServer>)
+  - [func \(r \*Resolver\) OnRootsChanged\(\_ context.Context, req \*mcp.RootsListChangedRequest\)](<#Resolver.OnRootsChanged>)
+  - [func \(r \*Resolver\) Registry\(ctx context.Context, req \*mcp.CallToolRequest\) \(\*Registry, error\)](<#Resolver.Registry>)
 - [type Source](<#Source>)
   - [func \(s \*Source\) Client\(\) \*mongo.Client](<#Source.Client>)
   - [func \(s \*Source\) Database\(name string\) \(\*mongo.Database, error\)](<#Source.Database>)
 
 
 <a name="ErrReadOnly"></a>
-## type ErrReadOnly
+## type [ErrReadOnly](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L21>)
 
 ErrReadOnly is returned when a write/admin operation targets a read\-only source.
 
@@ -38,7 +43,7 @@ type ErrReadOnly struct{ Source string }
 ```
 
 <a name="ErrReadOnly.Error"></a>
-### func \(ErrReadOnly\) Error
+### func \(ErrReadOnly\) [Error](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L23>)
 
 ```go
 func (e ErrReadOnly) Error() string
@@ -47,7 +52,7 @@ func (e ErrReadOnly) Error() string
 
 
 <a name="ErrUnknownSource"></a>
-## type ErrUnknownSource
+## type [ErrUnknownSource](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L29>)
 
 ErrUnknownSource is returned when a tool references a source name that is not in the configuration.
 
@@ -56,7 +61,7 @@ type ErrUnknownSource struct{ Source string }
 ```
 
 <a name="ErrUnknownSource.Error"></a>
-### func \(ErrUnknownSource\) Error
+### func \(ErrUnknownSource\) [Error](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L31>)
 
 ```go
 func (e ErrUnknownSource) Error() string
@@ -65,7 +70,7 @@ func (e ErrUnknownSource) Error() string
 
 
 <a name="Registry"></a>
-## type Registry
+## type [Registry](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L49-L54>)
 
 Registry holds the configuration and lazily\-connected sources.
 
@@ -76,7 +81,7 @@ type Registry struct {
 ```
 
 <a name="NewRegistry"></a>
-### func NewRegistry
+### func [NewRegistry](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L57>)
 
 ```go
 func NewRegistry(cfg map[string]config.SourceConfig) *Registry
@@ -85,7 +90,7 @@ func NewRegistry(cfg map[string]config.SourceConfig) *Registry
 NewRegistry builds a registry from the configured sources.
 
 <a name="Registry.Close"></a>
-### func \(\*Registry\) Close
+### func \(\*Registry\) [Close](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L172>)
 
 ```go
 func (r *Registry) Close(ctx context.Context) error
@@ -94,7 +99,7 @@ func (r *Registry) Close(ctx context.Context) error
 Close disconnects all connected sources and tears down SSH tunnels.
 
 <a name="Registry.Config"></a>
-### func \(\*Registry\) Config
+### func \(\*Registry\) [Config](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L74>)
 
 ```go
 func (r *Registry) Config(name string) (config.SourceConfig, bool)
@@ -103,7 +108,7 @@ func (r *Registry) Config(name string) (config.SourceConfig, bool)
 Config returns the static configuration for a source, if present.
 
 <a name="Registry.Get"></a>
-### func \(\*Registry\) Get
+### func \(\*Registry\) [Get](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L80>)
 
 ```go
 func (r *Registry) Get(ctx context.Context, name string) (*Source, error)
@@ -112,7 +117,7 @@ func (r *Registry) Get(ctx context.Context, name string) (*Source, error)
 Get returns a connected source by name, connecting on first use.
 
 <a name="Registry.Names"></a>
-### func \(\*Registry\) Names
+### func \(\*Registry\) [Names](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L65>)
 
 ```go
 func (r *Registry) Names() []string
@@ -121,7 +126,7 @@ func (r *Registry) Names() []string
 Names returns the configured source names.
 
 <a name="Registry.RequireWritable"></a>
-### func \(\*Registry\) RequireWritable
+### func \(\*Registry\) [RequireWritable](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L102>)
 
 ```go
 func (r *Registry) RequireWritable(ctx context.Context, name string) (*Source, error)
@@ -129,8 +134,55 @@ func (r *Registry) RequireWritable(ctx context.Context, name string) (*Source, e
 
 RequireWritable returns a connected source and errors if it is read\-only.
 
+<a name="Resolver"></a>
+## type [Resolver](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/resolver.go#L19-L27>)
+
+Resolver picks the registry a tool call runs against. A client that exposes a workspace root containing a RootConfigName file gets a registry built from that file; everything else falls back to the server's global registry \(base\), which may be nil in roots\-only mode. This lets one server serve several clients, each with its own sources, over both stdio and HTTP.
+
+```go
+type Resolver struct {
+    // contains filtered or unexported fields
+}
+```
+
+<a name="NewResolver"></a>
+### func [NewResolver](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/resolver.go#L38>)
+
+```go
+func NewResolver(base *Registry) *Resolver
+```
+
+NewResolver builds a resolver over the given global fallback registry \(nil for roots\-only mode\).
+
+<a name="Resolver.AttachServer"></a>
+### func \(\*Resolver\) [AttachServer](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/resolver.go#L49>)
+
+```go
+func (r *Resolver) AttachServer(srv *mcp.Server)
+```
+
+AttachServer wires the resolver to its server: it must be the same \*mcp.Server whose ServerOptions.RootsListChangedHandler is set to r.OnRootsChanged. It starts the background sweep that drops state for ended sessions.
+
+<a name="Resolver.OnRootsChanged"></a>
+### func \(\*Resolver\) [OnRootsChanged](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/resolver.go#L146>)
+
+```go
+func (r *Resolver) OnRootsChanged(_ context.Context, req *mcp.RootsListChangedRequest)
+```
+
+OnRootsChanged invalidates the cached roots for the signalling client. Wire it as ServerOptions.RootsListChangedHandler.
+
+<a name="Resolver.Registry"></a>
+### func \(\*Resolver\) [Registry](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/resolver.go#L60>)
+
+```go
+func (r *Resolver) Registry(ctx context.Context, req *mcp.CallToolRequest) (*Registry, error)
+```
+
+Registry resolves the registry for a tool call. Header\-injected roots are checked first and are request\-scoped — never cached on shared session state, so a proxy multiplexing several clients over one session may vary them per request without cross\-contamination. Next comes the client's roots/list \(cached per session\), then the global fallback. A nil request or a client without roots resolves straight to the fallback.
+
 <a name="Source"></a>
-## type Source
+## type [Source](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L36-L43>)
 
 Source is a live, connected MongoDB source.
 
@@ -144,7 +196,7 @@ type Source struct {
 ```
 
 <a name="Source.Client"></a>
-### func \(\*Source\) Client
+### func \(\*Source\) [Client](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L46>)
 
 ```go
 func (s *Source) Client() *mongo.Client
@@ -153,7 +205,7 @@ func (s *Source) Client() *mongo.Client
 Client returns the underlying MongoDB client.
 
 <a name="Source.Database"></a>
-### func \(\*Source\) Database
+### func \(\*Source\) [Database](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/source/source.go#L115>)
 
 ```go
 func (s *Source) Database(name string) (*mongo.Database, error)

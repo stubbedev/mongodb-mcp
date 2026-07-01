@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -17,7 +18,46 @@ type docsOut struct {
 	Documents []bson.M `json:"documents"`
 }
 
-func registerRead(server *mcp.Server, reg *source.Registry) {
+func registerRead(server *mcp.Server, res *source.Resolver) {
+	type sourceInfo struct {
+		Name            string `json:"name"`
+		Description     string `json:"description,omitempty"`
+		ReadOnly        bool   `json:"readonly"`
+		DefaultDatabase string `json:"defaultDatabase,omitempty"`
+		Remote          bool   `json:"remote"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "listSources",
+		Description: "List the configured sources available to this client, with an optional description of what each is for (use it to pick the right source for a task without being told which one), whether it is read-only, its default database, and whether it is reached over an SSH tunnel. Sources are resolved from the client's workspace root.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+	}, func(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		names := reg.Names()
+		sort.Strings(names)
+		infos := make([]sourceInfo, 0, len(names))
+		for _, n := range names {
+			c, ok := reg.Config(n)
+			if !ok {
+				continue
+			}
+			infos = append(infos, sourceInfo{
+				Name:            n,
+				Description:     c.Description,
+				ReadOnly:        c.ReadOnly,
+				DefaultDatabase: c.DefaultDatabase,
+				Remote:          c.SSH != nil,
+			})
+		}
+		out := struct {
+			Sources []sourceInfo `json:"sources"`
+		}{Sources: infos}
+		result, err := textResult(out)
+		return result, out, err
+	})
+
 	type findIn struct {
 		Source     string `json:"source" jsonschema:"Name of the configured source to query."`
 		Database   string `json:"database,omitempty" jsonschema:"Database name (defaults to the source's default_database)."`
@@ -32,7 +72,11 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		Name:        "find",
 		Description: "Query documents in a collection with an optional filter, projection, sort, limit and skip.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in findIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in findIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -93,7 +137,11 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		Description: "Run an aggregation pipeline against a collection. Pipelines using $out or $merge write data and are refused on read-only sources.",
 		// Not ReadOnlyHint: a pipeline may write via $out / $merge.
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in aggregateIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in aggregateIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -140,7 +188,11 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		Name:        "count",
 		Description: "Count documents in a collection matching an optional filter.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in countIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in countIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -175,7 +227,11 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		Name:        "distinct",
 		Description: "Return the distinct values for a field across matching documents.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in distinctIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in distinctIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -212,7 +268,11 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		Name:        "listDatabases",
 		Description: "List database names on the source.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listDatabasesIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in listDatabasesIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -236,7 +296,11 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		Name:        "listCollections",
 		Description: "List collection names in a database.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listCollectionsIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in listCollectionsIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil
@@ -265,7 +329,11 @@ func registerRead(server *mcp.Server, reg *source.Registry) {
 		Name:        "indexes",
 		Description: "List the indexes on a collection.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in indexesIn) (*mcp.CallToolResult, any, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in indexesIn) (*mcp.CallToolResult, any, error) {
+		reg, err := res.Registry(ctx, req)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
 		src, err := reg.Get(ctx, in.Source)
 		if err != nil {
 			return errResult(err), nil, nil

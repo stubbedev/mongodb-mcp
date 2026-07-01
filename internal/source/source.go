@@ -125,6 +125,12 @@ func (s *Source) Database(name string) (*mongo.Database, error) {
 func connect(ctx context.Context, name string, scfg config.SourceConfig) (*Source, error) {
 	opts := options.Client().ApplyURI(scfg.URI)
 
+	// Client-side operation timeout (CSOT): bounds every op (find, aggregate,
+	// write, ...) that lacks its own deadline. "0s" in config disables it.
+	if d := scfg.OperationTimeoutOrDefault(); d > 0 {
+		opts.SetTimeout(d)
+	}
+
 	var dialer *sshDialer
 	if scfg.SSH != nil {
 		d, err := newSSHDialer(scfg.SSH)

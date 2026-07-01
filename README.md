@@ -42,12 +42,15 @@ for editor completion. See [`config.example.json`](config.example.json).
   "sources": {
     "local": {
       "uri": "mongodb://localhost:27017",
+      "description": "Local dev database; safe to read and write.",
       "default_database": "test"
     },
     "prod": {
-      "uri": "mongodb://app:secret@db.internal:27017/?authSource=admin",
+      "uri": "mongodb://app:${PROD_MONGO_PW}@db.internal:27017/?authSource=admin",
+      "description": "Production replica for read-only analytics.",
       "readonly": true,
       "default_database": "app",
+      "operation_timeout": "20s",
       "ssh": {
         "host": "bastion.example.com",
         "user": "deploy",
@@ -75,6 +78,52 @@ name via their `source` argument.
   `insecure_ignore_host_key` is set.
 - **Read-only**: `"readonly": true` makes every write and admin tool refuse the
   source while keeping read tools available.
+- **Description**: `"description"` is a free-text summary surfaced by the
+  `listSources` tool so a model can pick the right source for a task on its own.
+- **Secrets**: `uri` and the ssh `password`/`passphrase` support `${ENV_VAR}`
+  expansion, so credentials need not live in the file (important for a
+  per-workspace `.mongodb-mcp.json` that may be committed).
+- **Timeouts**: `connect_timeout` bounds the initial connect/ping (default 10s);
+  `operation_timeout` caps every individual operation (default 30s, `"0s"`
+  disables).
+
+### Per-workspace config (MCP roots)
+
+One server can serve several clients, each with its own sources — no need to
+tell the model which connection to use. On every tool call the server resolves
+the config from the calling client's **MCP workspace root**:
+
+1. If a client root contains a `.mongodb-mcp.json`, that file's `sources` are
+   used (same schema as the global config; loaded per client, reloaded when the
+   file changes).
+2. Otherwise the server falls back to its global `--config` / XDG config.
+3. If neither exists, the call returns an error asking for a workspace config.
+
+This works over **both stdio and HTTP** — the root comes from the MCP `roots`
+capability the client advertises (e.g. Claude Code exposes the open workspace).
+A proxy that cannot use the roots protocol may inject roots via a request
+header: `X-Mcp-Roots: file:///path/to/repo` (comma-separated for several;
+`X-Mcp-Root` / `Mcp-Roots` / `Mcp-Root` also accepted).
+
+Header roots are **request-scoped**: they apply only to the request that carries
+them and are never cached on the session, so a proxy multiplexing several
+clients over one MCP session can vary them per request without one client seeing
+another's sources — but it must send the header on *every* request. The
+`roots/list` protocol result is cached per session (one client per session, as
+for stdio and stateful HTTP).
+
+Because the config can come entirely from clients, the global config is
+**optional**: start `mongodb-mcp` with no `--config` and it runs in roots-only
+mode, serving each client from its own `.mongodb-mcp.json`.
+
+```json
+// <repo>/.mongodb-mcp.json — per project (gitignore it if it holds secrets)
+{
+  "sources": {
+    "app": { "uri": "mongodb://localhost:27017", "default_database": "app", "readonly": true }
+  }
+}
+```
 
 ## Running
 
@@ -127,6 +176,7 @@ JSON strings.
 
 | Tool | Kind | Description |
 |---|---|---|
+| `listSources` | read | List configured sources with their description, read-only flag and default database. |
 | `find` | read | Query documents (filter, projection, sort, limit, skip). |
 | `aggregate` | read | Run an aggregation pipeline. |
 | `count` | read | Count documents matching a filter. |

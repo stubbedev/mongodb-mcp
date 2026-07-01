@@ -66,10 +66,13 @@ func collection(src *source.Source, dbName, collName string) (*mongo.Collection,
 // Read tools are always available. Write and admin tools are always registered
 // (so clients can discover them) but refuse at call time when the selected
 // source is read-only — see source.Registry.RequireWritable.
-func Register(server *mcp.Server, reg *source.Registry) {
-	registerRead(server, reg)
-	registerWrite(server, reg)
-	registerAdmin(server, reg)
+//
+// Each handler resolves its registry from the resolver per call, so the target
+// database follows the calling client's MCP workspace root.
+func Register(server *mcp.Server, res *source.Resolver) {
+	registerRead(server, res)
+	registerWrite(server, res)
+	registerAdmin(server, res)
 }
 
 // parseDoc parses a JSON / MongoDB Extended JSON object into a bson.D. An empty

@@ -13,8 +13,10 @@ The configuration is a single JSON document. Its JSON Schema is generated from t
 ## Index
 
 - [Constants](<#constants>)
+- [Variables](<#variables>)
 - [func ExpandPath\(p string\) string](<#ExpandPath>)
 - [type Config](<#Config>)
+  - [func Default\(\) \*Config](<#Default>)
   - [func Load\(path string\) \(\*Config, error\)](<#Load>)
   - [func \(c \*Config\) Validate\(\) error](<#Config.Validate>)
 - [type HTTPConfig](<#HTTPConfig>)
@@ -22,6 +24,7 @@ The configuration is a single JSON document. Its JSON Schema is generated from t
 - [type ServerConfig](<#ServerConfig>)
 - [type SourceConfig](<#SourceConfig>)
   - [func \(s SourceConfig\) ConnectTimeoutOrDefault\(\) time.Duration](<#SourceConfig.ConnectTimeoutOrDefault>)
+  - [func \(s SourceConfig\) OperationTimeoutOrDefault\(\) time.Duration](<#SourceConfig.OperationTimeoutOrDefault>)
 
 
 ## Constants
@@ -32,8 +35,22 @@ The configuration is a single JSON document. Its JSON Schema is generated from t
 const DefaultConfigName = "mongodb-mcp/config.json"
 ```
 
+<a name="RootConfigName"></a>RootConfigName is the per\-workspace config file name looked up at a client's MCP workspace root. When present it overrides the server's global config for that client, letting one server serve several clients each with their own sources.
+
+```go
+const RootConfigName = ".mongodb-mcp.json"
+```
+
+## Variables
+
+<a name="ErrNotFound"></a>ErrNotFound is returned by Load when no config file exists at the default XDG search path. Callers may treat this as "run without a global config" rather than a hard failure \(roots\-only mode\).
+
+```go
+var ErrNotFound = errors.New("no config file found")
+```
+
 <a name="ExpandPath"></a>
-## func ExpandPath
+## func [ExpandPath](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L294>)
 
 ```go
 func ExpandPath(p string) string
@@ -42,7 +59,7 @@ func ExpandPath(p string) string
 ExpandPath expands a leading \~ to the user's home directory.
 
 <a name="Config"></a>
-## type Config
+## type [Config](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L47-L62>)
 
 Config is the root configuration document.
 
@@ -65,8 +82,17 @@ type Config struct {
 }
 ```
 
+<a name="Default"></a>
+### func [Default](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L40>)
+
+```go
+func Default() *Config
+```
+
+Default returns a Config with server identity and HTTP transport defaults applied and no sources. It is used for roots\-only mode, where every source is supplied per client via RootConfigName.
+
 <a name="Load"></a>
-### func Load
+### func [Load](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L157>)
 
 ```go
 func Load(path string) (*Config, error)
@@ -75,7 +101,7 @@ func Load(path string) (*Config, error)
 Load reads and validates configuration. When path is empty the file is located via the XDG base directory specification.
 
 <a name="Config.Validate"></a>
-### func \(\*Config\) Validate
+### func \(\*Config\) [Validate](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L232>)
 
 ```go
 func (c *Config) Validate() error
@@ -84,7 +110,7 @@ func (c *Config) Validate() error
 Validate checks invariants that the JSON Schema cannot express.
 
 <a name="HTTPConfig"></a>
-## type HTTPConfig
+## type [HTTPConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L73-L101>)
 
 HTTPConfig configures the streamable HTTP transport. The defaults are chosen for same\-machine use but every field can be overridden to run cleanly behind a reverse proxy or MCP proxy.
 
@@ -121,7 +147,7 @@ type HTTPConfig struct {
 ```
 
 <a name="SSHConfig"></a>
-## type SSHConfig
+## type [SSHConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L140-L153>)
 
 SSHConfig configures an SSH tunnel for a source. Authentication methods are attempted in this order, using whatever is configured: SSH agent, identity file, then password — mirroring an interactive ssh client.
 
@@ -143,7 +169,7 @@ type SSHConfig struct {
 ```
 
 <a name="ServerConfig"></a>
-## type ServerConfig
+## type [ServerConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L65-L68>)
 
 ServerConfig holds the MCP server identity.
 
@@ -155,15 +181,23 @@ type ServerConfig struct {
 ```
 
 <a name="SourceConfig"></a>
-## type SourceConfig
+## type [SourceConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L104-L135>)
 
 SourceConfig describes a single MongoDB connection.
 
 ```go
 type SourceConfig struct {
     // URI is the standard MongoDB connection string. When SSH is set, the
-    // host(s) in this URI are resolved from the SSH server's network.
-    URI string `json:"uri" jsonschema:"description=MongoDB connection string (mongodb:// or mongodb+srv://). With ssh set, hosts are resolved from the SSH server's network.,minLength=1"`
+    // host(s) in this URI are resolved from the SSH server's network. Supports
+    // ${ENV_VAR} expansion so credentials can live in the environment rather
+    // than in the file.
+    URI string `json:"uri" jsonschema:"description=MongoDB connection string (mongodb:// or mongodb+srv://). Supports ${ENV_VAR} expansion. With ssh set, hosts are resolved from the SSH server's network.,minLength=1"`
+
+    // Description is an optional human-readable summary of what this source is
+    // for (e.g. "production analytics replica, read-only"). It is surfaced to
+    // MCP clients via listSources so a model can pick the right source for a
+    // task without being told which one to use.
+    Description string `json:"description,omitempty" jsonschema:"description=Human-readable summary of what this source is for; shown by listSources so a model can pick the right one."`
 
     // ReadOnly disables every write/admin tool for this source. Read tools
     // remain available.
@@ -176,18 +210,32 @@ type SourceConfig struct {
     // (e.g. "10s"). Defaults to 10s when empty.
     ConnectTimeout string `json:"connect_timeout,omitempty" jsonschema:"description=Connection/ping timeout as a Go duration (e.g. 10s). Default 10s."`
 
+    // OperationTimeout caps every individual operation (find, aggregate, write,
+    // ...) via the driver's client-side operation timeout. Go duration string.
+    // Defaults to 30s when empty; set "0s" to disable.
+    OperationTimeout string `json:"operation_timeout,omitempty" jsonschema:"description=Per-operation timeout as a Go duration (e.g. 30s). Default 30s; \"0s\" disables."`
+
     // SSH, when set, tunnels the MongoDB connection through an SSH server.
     SSH *SSHConfig `json:"ssh,omitempty" jsonschema:"description=Optional SSH tunnel. When set, the MongoDB connection is dialed through this SSH server."`
 }
 ```
 
 <a name="SourceConfig.ConnectTimeoutOrDefault"></a>
-### func \(SourceConfig\) ConnectTimeoutOrDefault
+### func \(SourceConfig\) [ConnectTimeoutOrDefault](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L269>)
 
 ```go
 func (s SourceConfig) ConnectTimeoutOrDefault() time.Duration
 ```
 
 ConnectTimeoutOrDefault returns the parsed timeout or the 10s default.
+
+<a name="SourceConfig.OperationTimeoutOrDefault"></a>
+### func \(SourceConfig\) [OperationTimeoutOrDefault](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L282>)
+
+```go
+func (s SourceConfig) OperationTimeoutOrDefault() time.Duration
+```
+
+OperationTimeoutOrDefault returns the parsed per\-operation timeout or the 30s default. A configured "0s" disables the timeout \(returns 0\).
 
 Generated by [gomarkdoc](<https://github.com/princjef/gomarkdoc>)

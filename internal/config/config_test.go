@@ -91,6 +91,50 @@ func TestConnectTimeoutOrDefault(t *testing.T) {
 	}
 }
 
+func TestOperationTimeoutOrDefault(t *testing.T) {
+	if d := (SourceConfig{}).OperationTimeoutOrDefault(); d != 30*time.Second {
+		t.Errorf("default = %v", d)
+	}
+	if d := (SourceConfig{OperationTimeout: "5s"}).OperationTimeoutOrDefault(); d != 5*time.Second {
+		t.Errorf("parsed = %v", d)
+	}
+	if d := (SourceConfig{OperationTimeout: "0s"}).OperationTimeoutOrDefault(); d != 0 {
+		t.Errorf("explicit 0s should disable, got %v", d)
+	}
+	if d := (SourceConfig{OperationTimeout: "garbage"}).OperationTimeoutOrDefault(); d != 30*time.Second {
+		t.Errorf("fallback = %v", d)
+	}
+}
+
+// Load expands ${ENV_VAR} in the URI and ssh secrets, so credentials can live
+// in the environment rather than in a (possibly committed) config file.
+func TestLoadExpandsEnv(t *testing.T) {
+	t.Setenv("TEST_MONGO_PW", "s3cret")
+	p := writeTemp(t, `{
+		"sources": {
+			"local": {"uri": "mongodb://app:${TEST_MONGO_PW}@localhost:27017"}
+		}
+	}`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Sources["local"].URI; got != "mongodb://app:s3cret@localhost:27017" {
+		t.Errorf("env not expanded in uri: %q", got)
+	}
+}
+
+// A variable that expands to empty leaves the URI empty and fails validation,
+// rather than silently connecting with a broken URI.
+func TestLoadEmptyEnvFailsValidation(t *testing.T) {
+	p := writeTemp(t, `{
+		"sources": {"local": {"uri": "${DEFINITELY_UNSET_VAR_XYZ}"}}
+	}`)
+	if _, err := Load(p); err == nil {
+		t.Fatal("expected validation error when uri expands to empty")
+	}
+}
+
 func TestExpandPath(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	if got := ExpandPath("~/x"); got != filepath.Join(home, "x") {

@@ -14,14 +14,17 @@
   "sources": {
     "local": {
       "uri": "mongodb://localhost:27017",
+      "description": "Local dev database; safe to read and write.",
       "readonly": false,
       "default_database": "test"
     },
     "prod": {
-      "uri": "mongodb://app:secret@db.internal:27017/?authSource=admin",
+      "uri": "mongodb://app:${PROD_MONGO_PW}@db.internal:27017/?authSource=admin",
+      "description": "Production replica for read-only analytics.",
       "readonly": true,
       "default_database": "app",
       "connect_timeout": "10s",
+      "operation_timeout": "20s",
       "ssh": {
         "host": "bastion.example.com",
         "port": 22,
