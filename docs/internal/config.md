@@ -50,7 +50,7 @@ var ErrNotFound = errors.New("no config file found")
 ```
 
 <a name="ExpandPath"></a>
-## func [ExpandPath](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L294>)
+## func ExpandPath
 
 ```go
 func ExpandPath(p string) string
@@ -59,7 +59,7 @@ func ExpandPath(p string) string
 ExpandPath expands a leading \~ to the user's home directory.
 
 <a name="Config"></a>
-## type [Config](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L47-L62>)
+## type Config
 
 Config is the root configuration document.
 
@@ -83,7 +83,7 @@ type Config struct {
 ```
 
 <a name="Default"></a>
-### func [Default](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L40>)
+### func Default
 
 ```go
 func Default() *Config
@@ -92,7 +92,7 @@ func Default() *Config
 Default returns a Config with server identity and HTTP transport defaults applied and no sources. It is used for roots\-only mode, where every source is supplied per client via RootConfigName.
 
 <a name="Load"></a>
-### func [Load](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L157>)
+### func Load
 
 ```go
 func Load(path string) (*Config, error)
@@ -101,7 +101,7 @@ func Load(path string) (*Config, error)
 Load reads and validates configuration. When path is empty the file is located via the XDG base directory specification.
 
 <a name="Config.Validate"></a>
-### func \(\*Config\) [Validate](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L232>)
+### func \(\*Config\) Validate
 
 ```go
 func (c *Config) Validate() error
@@ -110,7 +110,7 @@ func (c *Config) Validate() error
 Validate checks invariants that the JSON Schema cannot express.
 
 <a name="HTTPConfig"></a>
-## type [HTTPConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L73-L101>)
+## type HTTPConfig
 
 HTTPConfig configures the streamable HTTP transport. The defaults are chosen for same\-machine use but every field can be overridden to run cleanly behind a reverse proxy or MCP proxy.
 
@@ -147,7 +147,7 @@ type HTTPConfig struct {
 ```
 
 <a name="SSHConfig"></a>
-## type [SSHConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L140-L153>)
+## type SSHConfig
 
 SSHConfig configures an SSH tunnel for a source. Authentication methods are attempted in this order, using whatever is configured: SSH agent, identity file, then password — mirroring an interactive ssh client.
 
@@ -169,7 +169,7 @@ type SSHConfig struct {
 ```
 
 <a name="ServerConfig"></a>
-## type [ServerConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L65-L68>)
+## type ServerConfig
 
 ServerConfig holds the MCP server identity.
 
@@ -181,7 +181,7 @@ type ServerConfig struct {
 ```
 
 <a name="SourceConfig"></a>
-## type [SourceConfig](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L104-L135>)
+## type SourceConfig
 
 SourceConfig describes a single MongoDB connection.
 
@@ -221,7 +221,7 @@ type SourceConfig struct {
 ```
 
 <a name="SourceConfig.ConnectTimeoutOrDefault"></a>
-### func \(SourceConfig\) [ConnectTimeoutOrDefault](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L269>)
+### func \(SourceConfig\) ConnectTimeoutOrDefault
 
 ```go
 func (s SourceConfig) ConnectTimeoutOrDefault() time.Duration
@@ -230,7 +230,7 @@ func (s SourceConfig) ConnectTimeoutOrDefault() time.Duration
 ConnectTimeoutOrDefault returns the parsed timeout or the 10s default.
 
 <a name="SourceConfig.OperationTimeoutOrDefault"></a>
-### func \(SourceConfig\) [OperationTimeoutOrDefault](<https://github.com/stubbedev/mongodb-mcp/blob/master/internal/config/config.go#L282>)
+### func \(SourceConfig\) OperationTimeoutOrDefault
 
 ```go
 func (s SourceConfig) OperationTimeoutOrDefault() time.Duration
